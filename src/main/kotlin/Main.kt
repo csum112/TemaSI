@@ -66,11 +66,8 @@ class ECB(private val key: ByteArray) : EncryptionMode {
 }
 
 class CBC(private val key: ByteArray, private var iv: ByteArray) : EncryptionMode {
-    private fun updateIV(patch: ByteArray) {
-        iv = iv.toList()
-                .zip(patch.toList())
-                .map { p -> p.first.xor(p.second) }
-                .toByteArray()
+    private fun updateIV(newIV: ByteArray) {
+        iv = newIV
     }
 
     override fun encrypt(msg: ByteArray): List<ByteArray> {
@@ -79,7 +76,11 @@ class CBC(private val key: ByteArray, private var iv: ByteArray) : EncryptionMod
                 .chunked(16)
                 .map { chunk -> chunk.toByteArray() }
                 .map { block ->
-                    val newBlock = AES.encrypt(block, key)
+                    val xoredBlock = block.toList()
+                        .zip(iv.toList())
+                        .map { p -> p.first.xor(p.second) }
+                        .toByteArray()
+                    val newBlock = AES.encrypt(xoredBlock, key)
                     updateIV(newBlock)
                     newBlock
                 }
@@ -89,8 +90,12 @@ class CBC(private val key: ByteArray, private var iv: ByteArray) : EncryptionMod
         return msg
                 .map { block ->
                     val newBlock = AES.decrypt(block, key)
-                    updateIV(newBlock)
-                    newBlock
+                    val xoredBlock = newBlock.toList()
+                        .zip(iv.toList())
+                        .map { p -> p.first.xor(p.second) }
+                        .toByteArray()
+                    updateIV(block)
+                    xoredBlock
                 }
                 .flatMap { block -> block.asList() }
                 .toByteArray()

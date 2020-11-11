@@ -65,40 +65,73 @@ class ECB(private val key: ByteArray) : EncryptionMode {
     }
 }
 
-class CBC(private val key: ByteArray, private var iv: ByteArray) : EncryptionMode {
+//class CBC(private val key: ByteArray, private var iv: ByteArray) : EncryptionMode {
+//    private fun updateIV(newIV: ByteArray) {
+//        iv = newIV
+//    }
+//
+//    override fun encrypt(msg: ByteArray): List<ByteArray> {
+//        return msg
+//                .toList()
+//                .chunked(16)
+//                .map { chunk -> chunk.toByteArray() }
+//                .map { block ->
+//                    val xoredBlock = block.toList()
+//                        .zip(iv.toList())
+//                        .map { p -> p.first.xor(p.second) }
+//                        .toByteArray()
+//                    val newBlock = AES.encrypt(xoredBlock, key)
+//                    updateIV(newBlock)
+//                    newBlock
+//                }
+//    }
+//
+//    override fun decrypt(msg: List<ByteArray>): ByteArray {
+//        return msg
+//                .map { block ->
+//                    val newBlock = AES.decrypt(block, key)
+//                    val xoredBlock = newBlock.toList()
+//                        .zip(iv.toList())
+//                        .map { p -> p.first.xor(p.second) }
+//                        .toByteArray()
+//                    updateIV(block)
+//                    xoredBlock
+//                }
+//                .flatMap { block -> block.asList() }
+//                .toByteArray()
+//    }
+//}
+
+class CFB(private val key: ByteArray, private var iv: ByteArray) : EncryptionMode {
     private fun updateIV(newIV: ByteArray) {
         iv = newIV
     }
 
     override fun encrypt(msg: ByteArray): List<ByteArray> {
         return msg
-                .toList()
-                .chunked(16)
-                .map { chunk -> chunk.toByteArray() }
-                .map { block ->
-                    val xoredBlock = block.toList()
-                        .zip(iv.toList())
-                        .map { p -> p.first.xor(p.second) }
-                        .toByteArray()
-                    val newBlock = AES.encrypt(xoredBlock, key)
-                    updateIV(newBlock)
-                    newBlock
-                }
+            .toList()
+            .chunked(16)
+            .map { chunk -> chunk.toByteArray() }
+            .map { block ->
+//                print(block.toString(Charsets.UTF_8))
+                val encryptedBlock = AES.encrypt(iv, key)
+                val xoredBlock = encryptedBlock.toList().zip(block.toList()).map {p -> p.first.xor(p.second)}.toByteArray()
+                updateIV(xoredBlock)
+                xoredBlock
+            }
     }
 
     override fun decrypt(msg: List<ByteArray>): ByteArray {
         return msg
-                .map { block ->
-                    val newBlock = AES.decrypt(block, key)
-                    val xoredBlock = newBlock.toList()
-                        .zip(iv.toList())
-                        .map { p -> p.first.xor(p.second) }
-                        .toByteArray()
-                    updateIV(block)
-                    xoredBlock
-                }
-                .flatMap { block -> block.asList() }
-                .toByteArray()
+            .map { block ->
+//                print(block.toString(Charsets.UTF_8))
+                val encryptedBlock = AES.encrypt(iv, key)
+                val plainBlock = encryptedBlock.toList().zip(block.toList()).map {p -> p.first.xor(p.second)}.toByteArray()
+                updateIV(block)
+                plainBlock
+            }
+            .flatMap { block -> block.asList() }
+            .toByteArray()
     }
 }
 
@@ -176,7 +209,7 @@ class A(
 
     private fun getOption(): Int {
         val scanner = Scanner(System.`in`)
-        println("Enter 1 for ECB or 2 for CBC")
+        println("Enter 1 for ECB or 2 for CFB")
         val option = scanner.nextInt()
         scanner.close()
         return option
@@ -213,7 +246,7 @@ class A(
     private fun transmitData(option: Int, msg: ByteArray, key: ByteArray) {
         val cipher = when (option) {
             1 -> ECB(key)
-            else -> CBC(key, IV)
+            else -> CFB(key, IV)
         }
 
         val blocks = cipher.encrypt(msg)
@@ -235,7 +268,7 @@ class B(input: PipedInputStream, output: PipedOutputStream) : Node(input, output
         sendMessage("OK".toByteArray(Charsets.UTF_8))
         val cipher = when (option) {
             1 -> ECB(key)
-            else -> CBC(key, IV)
+            else -> CFB(key, IV)
         }
 
         val size = BigInteger(receiveMessage()).toInt()
